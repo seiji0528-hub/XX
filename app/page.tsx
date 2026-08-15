@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import AppShell from '@/components/AppShell';
-import LikesFeed from '@/components/LikesFeed';
+import Timeline from '@/components/Timeline';
 
-export default async function LikesPage() {
+export default async function HomePage() {
   const supabase = createClient();
 
   const {
@@ -22,10 +22,7 @@ export default async function LikesPage() {
 
   return (
     <AppShell me={profile}>
-      <div className="sticky top-0 bg-white/90 backdrop-blur border-b border-[#EFF3F4] px-4 py-3 hidden md:block">
-        <p className="text-[19px] font-bold">履歴</p>
-      </div>
-      <LikesFeed myUserId={profile.id} me={profile} />
+      <Timeline me={profile} />
     </AppShell>
   );
 }
