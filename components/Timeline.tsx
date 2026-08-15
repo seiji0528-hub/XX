@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { PostWithMeta, Profile } from '@/lib/types';
-import { POST_SELECT, mapPostRow } from '@/lib/postQuery';
+import { POST_SELECT, mapPostRow, attachQuotedPosts } from '@/lib/postQuery';
 import PostComposer from './PostComposer';
 import PostCard from './PostCard';
 
@@ -29,8 +29,10 @@ export default function Timeline({ me }: { me: Profile }) {
     ]);
 
     const postsById = new Map<string, PostWithMeta>();
-    (postRows as any[] ?? []).forEach((row) => {
-      postsById.set(row.id, mapPostRow(row, me.id));
+    const rawPosts = ((postRows as any[]) ?? []).map((row) => mapPostRow(row, me.id));
+    const postsWithQuotes = await attachQuotedPosts(rawPosts, supabase);
+    postsWithQuotes.forEach((post) => {
+      postsById.set(post.id, post);
     });
 
     const feed: FeedItem[] = [];
