@@ -30,7 +30,18 @@ export function mapPostRow(p: any, myUserId: string): PostWithMeta {
 
 // posts配列の中から quoted_post_id を集めて、引用元投稿をまとめて1回のクエリで取得し、
 // 各投稿の quoted_post に埋め込んで返す
-export async function attachQuotedPosts(
+export async function fetchPostById(
+  supabase: any,
+  postId: string,
+  myUserId: string
+): Promise<PostWithMeta | null> {
+  const { data: row } = await supabase.from('x_posts').select(POST_SELECT).eq('id', postId).single();
+  if (!row) return null;
+
+  const mapped = mapPostRow(row, myUserId);
+  const [withQuote] = await attachQuotedPosts([mapped], supabase);
+  return withQuote;
+}
   posts: PostWithMeta[],
   supabase: any
 ): Promise<PostWithMeta[]> {
