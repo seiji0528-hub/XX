@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { PostWithMeta, Profile } from '@/lib/types';
-import { POST_SELECT, mapPostRow } from '@/lib/postQuery';
+import { POST_SELECT, mapPostRow, attachQuotedPosts } from '@/lib/postQuery';
 import PostCard from './PostCard';
 
 export default function LikesFeed({ myUserId, me }: { myUserId: string; me?: Profile }) {
@@ -22,7 +22,8 @@ export default function LikesFeed({ myUserId, me }: { myUserId: string; me?: Pro
       .filter(Boolean)
       .map((p: any) => mapPostRow(p, myUserId));
 
-    setPosts(mapped);
+    const withQuotes = await attachQuotedPosts(mapped, supabase);
+    setPosts(withQuotes);
   }, [supabase, myUserId]);
 
   useEffect(() => {
