@@ -7,6 +7,14 @@ export type Profile = {
   created_at: string;
 };
 
+export type QuotedPostMeta = {
+  id: string;
+  content: string;
+  image_url: string | null;
+  created_at: string;
+  profiles: Pick<Profile, 'username' | 'display_name' | 'avatar_url'>;
+} | null;
+
 export type PostWithMeta = {
   id: string;
   user_id: string;
@@ -17,6 +25,9 @@ export type PostWithMeta = {
   likes_count: number;
   liked_by_me: boolean;
   comments_count: number;
+  repost_count: number;
+  reposted_by_me: boolean;
+  quoted_post: QuotedPostMeta;
 };
 
 export type CommentWithProfile = {
