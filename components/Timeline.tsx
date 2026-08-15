@@ -3,54 +3,66 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { PostWithMeta, Profile } from '@/lib/types';
+import { POST_SELECT, mapPostRow } from '@/lib/postQuery';
 import PostComposer from './PostComposer';
 import PostCard from './PostCard';
 
+type FeedItem = {
+  key: string;
+  post: PostWithMeta;
+  sortTime: string;
+  repostedBy?: { display_name: string; username: string } | null;
+};
+
 export default function Timeline({ me }: { me: Profile }) {
   const supabase = createClient();
-  const [posts, setPosts] = useState<PostWithMeta[] | null>(null);
+  const [items, setItems] = useState<FeedItem[] | null>(null);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('x_posts')
-      .select(
-        `id, user_id, content, image_url, created_at,
-         x_profiles!x_posts_user_id_fkey ( username, display_name, avatar_url ),
-         x_likes ( user_id ),
-         x_comments ( id )`
-      )
-      .order('created_at', { ascending: false })
-      .limit(50);
+    const [{ data: postRows }, { data: repostRows }] = await Promise.all([
+      supabase.from('x_posts').select(POST_SELECT).order('created_at', { ascending: false }).limit(80),
+      supabase
+        .from('x_reposts')
+        .select('post_id, created_at, x_profiles ( username, display_name, avatar_url )')
+        .order('created_at', { ascending: false })
+        .limit(80),
+    ]);
 
-    if (error || !data) {
-      setPosts([]);
-      return;
-    }
+    const postsById = new Map<string, PostWithMeta>();
+    (postRows as any[] ?? []).forEach((row) => {
+      postsById.set(row.id, mapPostRow(row, me.id));
+    });
 
-    const mapped: PostWithMeta[] = (data as any[]).map((p) => ({
-      id: p.id,
-      user_id: p.user_id,
-      content: p.content,
-      image_url: p.image_url,
-      created_at: p.created_at,
-      profiles: p.x_profiles,
-      likes_count: p.x_likes?.length ?? 0,
-      liked_by_me: !!p.x_likes?.some((l: any) => l.user_id === me.id),
-      comments_count: p.x_comments?.length ?? 0,
-    }));
+    const feed: FeedItem[] = [];
 
-    setPosts(mapped);
+    postsById.forEach((post) => {
+      feed.push({ key: `post-${post.id}`, post, sortTime: post.created_at });
+    });
+
+    (repostRows as any[] ?? []).forEach((row) => {
+      const post = postsById.get(row.post_id);
+      if (!post) return;
+      feed.push({
+        key: `repost-${row.post_id}-${row.created_at}`,
+        post,
+        sortTime: row.created_at,
+        repostedBy: row.x_profiles,
+      });
+    });
+
+    feed.sort((a, b) => new Date(b.sortTime).getTime() - new Date(a.sortTime).getTime());
+    setItems(feed.slice(0, 60));
   }, [supabase, me.id]);
 
   useEffect(() => {
     load();
 
-    // 新規投稿・いいね・コメントが入ったらリアルタイムで再取得
     const channel = supabase
       .channel('timeline-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'x_posts' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'x_likes' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'x_comments' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'x_reposts' }, load)
       .subscribe();
 
     return () => {
@@ -62,19 +74,26 @@ export default function Timeline({ me }: { me: Profile }) {
     <div>
       <PostComposer me={me} onPosted={load} />
 
-      {posts === null && (
+      {items === null && (
         <p className="text-center text-[#536471] text-[14px] py-8">読み込み中…</p>
       )}
 
-      {posts !== null && posts.length === 0 && (
+      {items !== null && items.length === 0 && (
         <div className="text-center py-16 px-6">
           <p className="text-[17px] font-bold mb-1">まだ投稿がありません</p>
           <p className="text-[14px] text-[#536471]">最初の投稿をしてみよう</p>
         </div>
       )}
 
-      {posts?.map((post) => (
-        <PostCard key={post.id} post={post} myUserId={me.id} onChanged={load} />
+      {items?.map((item) => (
+        <PostCard
+          key={item.key}
+          post={item.post}
+          myUserId={me.id}
+          me={me}
+          repostedBy={item.repostedBy}
+          onChanged={load}
+        />
       ))}
     </div>
   );
