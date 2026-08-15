@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import AppShell from '@/components/AppShell';
-import PostCard from '@/components/PostCard';
+import PostDetailClient from '@/components/PostDetailClient';
 import BackButton from '@/components/BackButton';
 import { fetchPostById } from '@/lib/postQuery';
 
@@ -26,7 +26,7 @@ export default async function PostDetailPage({ params }: { params: { id: string 
         <BackButton />
         <p className="text-[19px] font-bold">投稿</p>
       </div>
-      <PostCard post={post} myUserId={me.id} me={me} onChanged={() => {}} defaultShowComments />
+      <PostDetailClient post={post} myUserId={me.id} me={me} />
     </AppShell>
   );
 }
