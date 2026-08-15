@@ -40,6 +40,28 @@ export default function PostCard({
   const [commentInput, setCommentInput] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+
+  const isOwner = myUserId === post.user_id;
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    const { error } = await supabase.from('x_posts').delete().eq('id', post.id);
+    setDeleting(false);
+
+    if (!error) {
+      setDeleted(true);
+      setConfirmOpen(false);
+      onChanged();
+    }
+  }
+
+  if (deleted) return null;
+
   async function toggleLike() {
     if (likeBusy) return;
     setLikeBusy(true);
@@ -99,13 +121,45 @@ export default function PostCard({
         </Link>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 text-[15px] flex-wrap">
-            <Link href={`/profile/${post.profiles.username}`} className="font-bold hover:underline">
-              {post.profiles.display_name}
-            </Link>
-            <span className="text-[#536471]">@{post.profiles.username}</span>
-            <span className="text-[#536471]">·</span>
-            <span className="text-[#536471]">{formatTime(post.created_at)}</span>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-1.5 text-[15px] flex-wrap">
+              <Link href={`/profile/${post.profiles.username}`} className="font-bold hover:underline">
+                {post.profiles.display_name}
+              </Link>
+              <span className="text-[#536471]">@{post.profiles.username}</span>
+              <span className="text-[#536471]">·</span>
+              <span className="text-[#536471]">{formatTime(post.created_at)}</span>
+            </div>
+
+            {isOwner && (
+              <div className="relative shrink-0 -mt-1 -mr-2">
+                <button
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[#536471] hover:bg-[#4A5FE0]/10 hover:text-[#4A5FE0] transition-colors"
+                  aria-label="投稿メニュー"
+                >
+                  <MoreIcon />
+                </button>
+
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+                    <div className="absolute right-0 top-9 z-30 w-44 bg-white rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.15)] border border-[#EFF3F4] overflow-hidden">
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setConfirmOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-bold text-[#F4212E] hover:bg-[#F4212E]/10 transition-colors"
+                      >
+                        <TrashIcon />
+                        削除
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <p className="text-[15px] whitespace-pre-wrap mt-0.5 break-words">{post.content}</p>
@@ -173,6 +227,38 @@ export default function PostCard({
           )}
         </div>
       </div>
+
+      {confirmOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6"
+          onClick={() => !deleting && setConfirmOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-[340px] p-6 flex flex-col items-center text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[18px] font-bold mb-1">投稿を削除しますか?</p>
+            <p className="text-[14px] text-[#536471] mb-5">
+              この操作は取り消せません。
+            </p>
+
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="w-full h-[44px] rounded-full bg-[#F4212E] text-white text-[15px] font-bold disabled:opacity-50 transition-opacity"
+            >
+              {deleting ? '削除中…' : '削除'}
+            </button>
+            <button
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleting}
+              className="w-full h-[44px] rounded-full border border-[#CFD9DE] text-[15px] font-bold mt-2 disabled:opacity-50"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -200,6 +286,31 @@ function CommentIcon() {
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+      <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-8 0v12a2 2 0 002 2h6a2 2 0 002-2V7"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
   );
 }
