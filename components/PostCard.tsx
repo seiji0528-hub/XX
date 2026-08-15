@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import type { PostWithMeta, CommentWithProfile } from '@/lib/types';
+import type { PostWithMeta, CommentWithProfile, Profile } from '@/lib/types';
 import { Avatar } from './PostComposer';
+import QuoteModal from './QuoteModal';
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -23,10 +24,14 @@ function formatTime(iso: string) {
 export default function PostCard({
   post,
   myUserId,
+  me,
+  repostedBy,
   onChanged,
 }: {
   post: PostWithMeta;
   myUserId: string;
+  me?: Profile;
+  repostedBy?: { display_name: string; username: string } | null;
   onChanged: () => void;
 }) {
   const supabase = createClient();
@@ -34,6 +39,12 @@ export default function PostCard({
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likeCount, setLikeCount] = useState(post.likes_count);
   const [likeBusy, setLikeBusy] = useState(false);
+
+  const [reposted, setReposted] = useState(post.reposted_by_me);
+  const [repostCount, setRepostCount] = useState(post.repost_count);
+  const [repostBusy, setRepostBusy] = useState(false);
+  const [repostMenuOpen, setRepostMenuOpen] = useState(false);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
 
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<CommentWithProfile[] | null>(null);
@@ -81,6 +92,27 @@ export default function PostCard({
     setLikeBusy(false);
   }
 
+  async function toggleRepost() {
+    if (repostBusy) return;
+    setRepostMenuOpen(false);
+    setRepostBusy(true);
+    const nextReposted = !reposted;
+    setReposted(nextReposted);
+    setRepostCount((c) => c + (nextReposted ? 1 : -1));
+
+    if (nextReposted) {
+      await supabase.from('x_reposts').insert({ post_id: post.id, user_id: myUserId });
+    } else {
+      await supabase
+        .from('x_reposts')
+        .delete()
+        .eq('post_id', post.id)
+        .eq('user_id', myUserId);
+    }
+    setRepostBusy(false);
+    onChanged();
+  }
+
   async function toggleComments() {
     const next = !showComments;
     setShowComments(next);
@@ -115,6 +147,13 @@ export default function PostCard({
 
   return (
     <article className="border-b border-[#EFF3F4] px-4 py-3">
+      {repostedBy && (
+        <div className="flex items-center gap-2 text-[13px] text-[#536471] font-bold mb-2 pl-7">
+          <RepostIcon small />
+          {repostedBy.display_name} がリポスト
+        </div>
+      )}
+
       <div className="flex gap-3">
         <Link href={`/profile/${post.profiles.username}`}>
           <Avatar url={post.profiles.avatar_url} name={post.profiles.display_name} size={44} />
@@ -170,6 +209,27 @@ export default function PostCard({
             </div>
           )}
 
+          {/* 引用元投稿のプレビュー */}
+          {post.quoted_post && (
+            <div className="mt-2 border border-[#EFF3F4] rounded-2xl p-3">
+              <div className="flex items-center gap-1.5 text-[13px] flex-wrap">
+                <Avatar
+                  url={post.quoted_post.profiles.avatar_url}
+                  name={post.quoted_post.profiles.display_name}
+                  size={20}
+                />
+                <span className="font-bold">{post.quoted_post.profiles.display_name}</span>
+                <span className="text-[#536471]">@{post.quoted_post.profiles.username}</span>
+              </div>
+              <p className="text-[14px] whitespace-pre-wrap break-words mt-1">{post.quoted_post.content}</p>
+              {post.quoted_post.image_url && (
+                <div className="mt-2 rounded-xl overflow-hidden">
+                  <img src={post.quoted_post.image_url} alt="" className="w-full max-h-[200px] object-cover" />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-8 mt-3 text-[#536471]">
             <button
               onClick={toggleComments}
@@ -178,6 +238,43 @@ export default function PostCard({
               <CommentIcon />
               <span className="text-[13px]">{comments?.length ?? post.comments_count}</span>
             </button>
+
+            <div className="relative">
+              <button
+                onClick={() => setRepostMenuOpen((v) => !v)}
+                className={`flex items-center gap-1.5 transition-colors ${
+                  reposted ? 'text-[#00BA7C]' : 'hover:text-[#00BA7C]'
+                }`}
+              >
+                <RepostIcon filled={reposted} />
+                <span className="text-[13px]">{repostCount}</span>
+              </button>
+
+              {repostMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setRepostMenuOpen(false)} />
+                  <div className="absolute left-0 top-8 z-30 w-48 bg-white rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.15)] border border-[#EFF3F4] overflow-hidden">
+                    <button
+                      onClick={toggleRepost}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-bold hover:bg-[#F7F8F8] transition-colors"
+                    >
+                      <RepostIcon filled={reposted} />
+                      {reposted ? 'リポストを取り消す' : 'リポスト'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRepostMenuOpen(false);
+                        setQuoteModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-bold hover:bg-[#F7F8F8] transition-colors border-t border-[#EFF3F4]"
+                    >
+                      <QuoteIcon />
+                      引用
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             <button
               onClick={toggleLike}
@@ -259,6 +356,15 @@ export default function PostCard({
           </div>
         </div>
       )}
+
+      {quoteModalOpen && me && (
+        <QuoteModal
+          me={me}
+          targetPost={post}
+          onClose={() => setQuoteModalOpen(false)}
+          onPosted={onChanged}
+        />
+      )}
     </article>
   );
 }
@@ -282,6 +388,42 @@ function CommentIcon() {
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
       <path
         d="M21 12c0 4.4-4 8-9 8-1.2 0-2.4-.2-3.4-.6L3 20l1.1-4.1C3.4 14.6 3 13.3 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function RepostIcon({ filled, small }: { filled?: boolean; small?: boolean }) {
+  const size = small ? 15 : 19;
+  const color = filled ? '#00BA7C' : 'currentColor';
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M6 5h9a3 3 0 013 3v3M6 5L3 8M6 5l3 3"
+        stroke={color}
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18 19H9a3 3 0 01-3-3v-3M18 19l3-3M18 19l-3 3"
+        stroke={color}
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function QuoteIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M5 5h14a1 1 0 011 1v9a1 1 0 01-1 1H9l-4 4V6a1 1 0 011-1z"
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinejoin="round"
