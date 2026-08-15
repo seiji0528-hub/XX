@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { PostWithMeta } from '@/lib/types';
+import type { PostWithMeta, Profile } from '@/lib/types';
+import { POST_SELECT, mapPostRow } from '@/lib/postQuery';
 import PostCard from './PostCard';
 
 export default function ProfileFeed({
   userId,
   myUserId,
+  me,
 }: {
   userId: string;
   myUserId: string;
+  me?: Profile;
 }) {
   const supabase = createClient();
   const [posts, setPosts] = useState<PostWithMeta[] | null>(null);
@@ -18,28 +21,12 @@ export default function ProfileFeed({
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('x_posts')
-      .select(
-        `id, user_id, content, image_url, created_at,
-         x_profiles!x_posts_user_id_fkey ( username, display_name, avatar_url ),
-         x_likes ( user_id ),
-         x_comments ( id )`
-      )
+      .select(POST_SELECT)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50);
 
-    const mapped: PostWithMeta[] = ((data as any[]) ?? []).map((p) => ({
-      id: p.id,
-      user_id: p.user_id,
-      content: p.content,
-      image_url: p.image_url,
-      created_at: p.created_at,
-      profiles: p.x_profiles,
-      likes_count: p.x_likes?.length ?? 0,
-      liked_by_me: !!p.x_likes?.some((l: any) => l.user_id === myUserId),
-      comments_count: p.x_comments?.length ?? 0,
-    }));
-
+    const mapped = ((data as any[]) ?? []).map((row) => mapPostRow(row, myUserId));
     setPosts(mapped);
   }, [supabase, userId, myUserId]);
 
@@ -62,7 +49,7 @@ export default function ProfileFeed({
   return (
     <div>
       {posts.map((post) => (
-        <PostCard key={post.id} post={post} myUserId={myUserId} onChanged={load} />
+        <PostCard key={post.id} post={post} myUserId={myUserId} me={me} onChanged={load} />
       ))}
     </div>
   );
