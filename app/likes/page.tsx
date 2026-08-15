@@ -25,7 +25,7 @@ export default async function LikesPage() {
       <div className="sticky top-0 bg-white/90 backdrop-blur border-b border-[#EFF3F4] px-4 py-3 hidden md:block">
         <p className="text-[19px] font-bold">履歴</p>
       </div>
-      <LikesFeed myUserId={profile.id} />
+      <LikesFeed myUserId={profile.id} me={profile} />
     </AppShell>
   );
 }
