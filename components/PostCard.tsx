@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { PostWithMeta, CommentWithProfile, Profile } from '@/lib/types';
 import { Avatar } from './PostComposer';
@@ -21,20 +22,25 @@ function formatTime(iso: string) {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
+const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
 export default function PostCard({
   post,
   myUserId,
   me,
   repostedBy,
   onChanged,
+  defaultShowComments,
 }: {
   post: PostWithMeta;
   myUserId: string;
   me?: Profile;
   repostedBy?: { display_name: string; username: string } | null;
   onChanged: () => void;
+  defaultShowComments?: boolean;
 }) {
   const supabase = createClient();
+  const router = useRouter();
 
   const [liked, setLiked] = useState(post.liked_by_me);
   const [likeCount, setLikeCount] = useState(post.likes_count);
@@ -46,7 +52,7 @@ export default function PostCard({
   const [repostMenuOpen, setRepostMenuOpen] = useState(false);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
 
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(!!defaultShowComments);
   const [comments, setComments] = useState<CommentWithProfile[] | null>(null);
   const [commentInput, setCommentInput] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
@@ -56,7 +62,24 @@ export default function PostCard({
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
 
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   const isOwner = myUserId === post.user_id;
+
+  const loadComments = useCallback(async () => {
+    const { data } = await supabase
+      .from('x_comments')
+      .select('id, post_id, user_id, content, created_at, x_profiles ( username, display_name, avatar_url )')
+      .eq('post_id', post.id)
+      .order('created_at', { ascending: true });
+    const mapped = ((data as any[]) ?? []).map((c) => ({ ...c, profiles: c.x_profiles }));
+    setComments(mapped);
+  }, [supabase, post.id]);
+
+  useEffect(() => {
+    if (defaultShowComments) loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleDelete() {
     if (deleting) return;
@@ -72,6 +95,10 @@ export default function PostCard({
   }
 
   if (deleted) return null;
+
+  function goToPost() {
+    router.push(`/post/${post.id}`);
+  }
 
   async function toggleLike() {
     if (likeBusy) return;
@@ -117,13 +144,7 @@ export default function PostCard({
     const next = !showComments;
     setShowComments(next);
     if (next && comments === null) {
-      const { data } = await supabase
-        .from('x_comments')
-        .select('id, post_id, user_id, content, created_at, x_profiles ( username, display_name, avatar_url )')
-        .eq('post_id', post.id)
-        .order('created_at', { ascending: true });
-      const mapped = ((data as any[]) ?? []).map((c) => ({ ...c, profiles: c.x_profiles }));
-      setComments(mapped);
+      await loadComments();
     }
   }
 
@@ -146,23 +167,29 @@ export default function PostCard({
   }
 
   return (
-    <article className="border-b border-[#EFF3F4] px-4 py-3">
+    <article
+      onClick={goToPost}
+      className="border-b border-[#EFF3F4] px-4 py-3 cursor-pointer hover:bg-[#FAFAFA] transition-colors"
+    >
       {repostedBy && (
         <div className="flex items-center gap-2 text-[13px] text-[#536471] font-bold mb-2 pl-7">
           <RepostIcon small />
-          {repostedBy.display_name} がリポスト
+          <Link href={`/profile/${repostedBy.username}`} onClick={stop} className="hover:underline">
+            {repostedBy.display_name}
+          </Link>
+          <span>がリポスト</span>
         </div>
       )}
 
       <div className="flex gap-3">
-        <Link href={`/profile/${post.profiles.username}`}>
+        <Link href={`/profile/${post.profiles.username}`} onClick={stop}>
           <Avatar url={post.profiles.avatar_url} name={post.profiles.display_name} size={44} />
         </Link>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-1.5 text-[15px] flex-wrap">
-              <Link href={`/profile/${post.profiles.username}`} className="font-bold hover:underline">
+              <Link href={`/profile/${post.profiles.username}`} onClick={stop} className="font-bold hover:underline">
                 {post.profiles.display_name}
               </Link>
               <span className="text-[#536471]">@{post.profiles.username}</span>
@@ -171,7 +198,7 @@ export default function PostCard({
             </div>
 
             {isOwner && (
-              <div className="relative shrink-0 -mt-1 -mr-2">
+              <div className="relative shrink-0 -mt-1 -mr-2" onClick={stop}>
                 <button
                   onClick={() => setMenuOpen((v) => !v)}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-[#536471] hover:bg-[#4A5FE0]/10 hover:text-[#4A5FE0] transition-colors"
@@ -204,14 +231,28 @@ export default function PostCard({
           <p className="text-[15px] whitespace-pre-wrap mt-0.5 break-words">{post.content}</p>
 
           {post.image_url && (
-            <div className="mt-2 rounded-2xl overflow-hidden border border-[#EFF3F4]">
-              <img src={post.image_url} alt="" className="w-full max-h-[420px] object-cover" />
+            <div
+              className="mt-2 rounded-2xl overflow-hidden border border-[#EFF3F4] inline-block max-w-full"
+              onClick={stop}
+            >
+              <img
+                src={post.image_url}
+                alt=""
+                onClick={() => setLightboxUrl(post.image_url)}
+                className="block max-h-[500px] max-w-full w-auto h-auto cursor-zoom-in"
+              />
             </div>
           )}
 
-          {/* 引用元投稿のプレビュー */}
+          {/* 引用元投稿のプレビュー(タップでその投稿へ) */}
           {post.quoted_post && (
-            <div className="mt-2 border border-[#EFF3F4] rounded-2xl p-3">
+            <div
+              onClick={(e) => {
+                stop(e);
+                router.push(`/post/${post.quoted_post!.id}`);
+              }}
+              className="mt-2 border border-[#EFF3F4] rounded-2xl p-3 hover:bg-[#F7F8F8] transition-colors cursor-pointer"
+            >
               <div className="flex items-center gap-1.5 text-[13px] flex-wrap">
                 <Avatar
                   url={post.quoted_post.profiles.avatar_url}
@@ -224,13 +265,17 @@ export default function PostCard({
               <p className="text-[14px] whitespace-pre-wrap break-words mt-1">{post.quoted_post.content}</p>
               {post.quoted_post.image_url && (
                 <div className="mt-2 rounded-xl overflow-hidden">
-                  <img src={post.quoted_post.image_url} alt="" className="w-full max-h-[200px] object-cover" />
+                  <img
+                    src={post.quoted_post.image_url}
+                    alt=""
+                    className="block max-h-[240px] max-w-full w-auto h-auto"
+                  />
                 </div>
               )}
             </div>
           )}
 
-          <div className="flex items-center gap-8 mt-3 text-[#536471]">
+          <div className="flex items-center gap-8 mt-3 text-[#536471]" onClick={stop}>
             <button
               onClick={toggleComments}
               className="flex items-center gap-1.5 hover:text-[#4A5FE0] transition-colors"
@@ -288,7 +333,7 @@ export default function PostCard({
           </div>
 
           {showComments && (
-            <div className="mt-3 pl-1 border-l-2 border-[#EFF3F4] pl-3 flex flex-col gap-3">
+            <div className="mt-3 pl-1 border-l-2 border-[#EFF3F4] pl-3 flex flex-col gap-3" onClick={stop}>
               {comments === null && <p className="text-[13px] text-[#536471]">読み込み中…</p>}
               {comments?.map((c) => (
                 <div key={c.id} className="flex gap-2">
@@ -328,11 +373,14 @@ export default function PostCard({
       {confirmOpen && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6"
-          onClick={() => !deleting && setConfirmOpen(false)}
+          onClick={(e) => {
+            stop(e);
+            if (!deleting) setConfirmOpen(false);
+          }}
         >
           <div
             className="bg-white rounded-2xl w-full max-w-[340px] p-6 flex flex-col items-center text-center"
-            onClick={(e) => e.stopPropagation()}
+            onClick={stop}
           >
             <p className="text-[18px] font-bold mb-1">投稿を削除しますか?</p>
             <p className="text-[14px] text-[#536471] mb-5">
@@ -358,12 +406,41 @@ export default function PostCard({
       )}
 
       {quoteModalOpen && me && (
-        <QuoteModal
-          me={me}
-          targetPost={post}
-          onClose={() => setQuoteModalOpen(false)}
-          onPosted={onChanged}
-        />
+        <div onClick={stop}>
+          <QuoteModal
+            me={me}
+            targetPost={post}
+            onClose={() => setQuoteModalOpen(false)}
+            onPosted={onChanged}
+          />
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[100] px-4"
+          onClick={(e) => {
+            stop(e);
+            setLightboxUrl(null);
+          }}
+        >
+          <button
+            onClick={(e) => {
+              stop(e);
+              setLightboxUrl(null);
+            }}
+            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+            aria-label="閉じる"
+          >
+            <CloseIcon />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt=""
+            onClick={stop}
+            className="max-w-[95vw] max-h-[95vh] object-contain"
+          />
+        </div>
       )}
     </article>
   );
@@ -453,6 +530,19 @@ function TrashIcon() {
         strokeLinejoin="round"
       />
       <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M6 6l12 12M18 6L6 18"
+        stroke="white"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
