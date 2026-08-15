@@ -42,6 +42,9 @@ export async function fetchPostById(
   const [withQuote] = await attachQuotedPosts([mapped], supabase);
   return withQuote;
 }
+// posts配列の中から quoted_post_id を集めて、引用元投稿をまとめて1回のクエリで取得し、
+// 各投稿の quoted_post に埋め込んで返す
+export async function attachQuotedPosts(
   posts: PostWithMeta[],
   supabase: any
 ): Promise<PostWithMeta[]> {
