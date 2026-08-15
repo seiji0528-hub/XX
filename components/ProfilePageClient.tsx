@@ -19,7 +19,7 @@ export default function ProfilePageClient({
   return (
     <AppShell me={me}>
       <ProfileHeader profile={profile} isMe={isMe} onUpdated={setProfile} />
-      <ProfileFeed userId={profile.id} myUserId={me.id} />
+      <ProfileFeed userId={profile.id} myUserId={me.id} me={me} />
     </AppShell>
   );
 }
