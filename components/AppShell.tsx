@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/lib/types';
+import { Avatar } from './PostComposer';
 
 export default function AppShell({
   me,
@@ -16,13 +18,22 @@ export default function AppShell({
   const router = useRouter();
   const supabase = createClient();
 
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
   }
 
+  async function handleAddAccount() {
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  }
+
   const isHome = pathname === '/';
+  const isLikes = pathname === '/likes';
   const isProfile = pathname === `/profile/${me.username}`;
 
   return (
@@ -45,6 +56,15 @@ export default function AppShell({
               ホーム
             </Link>
             <Link
+              href="/likes"
+              className={`flex items-center gap-4 px-3 py-3 rounded-full text-[19px] hover:bg-[#F7F8F8] transition-colors ${
+                isLikes ? 'font-bold' : ''
+              }`}
+            >
+              <BookmarkIcon filled={isLikes} />
+              履歴
+            </Link>
+            <Link
               href={`/profile/${me.username}`}
               className={`flex items-center gap-4 px-3 py-3 rounded-full text-[19px] hover:bg-[#F7F8F8] transition-colors ${
                 isProfile ? 'font-bold' : ''
@@ -55,12 +75,37 @@ export default function AppShell({
             </Link>
           </nav>
 
-          <div className="mt-auto">
+          <div className="mt-auto relative">
+            {accountMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setAccountMenuOpen(false)} />
+                <div className="absolute bottom-[64px] left-0 right-0 z-30 bg-white rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.18)] border border-[#EFF3F4] overflow-hidden">
+                  <button
+                    onClick={handleAddAccount}
+                    className="w-full text-left px-4 py-3 text-[14px] font-bold hover:bg-[#F7F8F8] transition-colors"
+                  >
+                    新しいアカウントを追加
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-3 text-[14px] font-bold text-[#F4212E] hover:bg-[#F4212E]/10 transition-colors border-t border-[#EFF3F4]"
+                  >
+                    @{me.username} をログアウト
+                  </button>
+                </div>
+              </>
+            )}
+
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 px-3 py-3 rounded-full text-[15px] text-[#536471] hover:bg-[#F7F8F8] transition-colors w-full text-left"
+              onClick={() => setAccountMenuOpen((v) => !v)}
+              className="flex items-center gap-3 px-3 py-3 rounded-full hover:bg-[#F7F8F8] transition-colors w-full text-left"
             >
-              {me.display_name} をログアウト
+              <Avatar url={me.avatar_url} name={me.display_name} size={36} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-bold truncate">{me.display_name}</p>
+                <p className="text-[13px] text-[#536471] truncate">@{me.username}</p>
+              </div>
+              <MoreIcon />
             </button>
           </div>
         </aside>
@@ -80,12 +125,42 @@ export default function AppShell({
         <Link href="/" className="p-3">
           <HomeIcon filled={isHome} />
         </Link>
+        <Link href="/likes" className="p-3">
+          <BookmarkIcon filled={isLikes} />
+        </Link>
         <Link href={`/profile/${me.username}`} className="p-3">
           <UserIcon filled={isProfile} />
         </Link>
-        <button onClick={handleLogout} className="p-3">
-          <LogoutIcon />
-        </button>
+
+        <div className="relative">
+          {accountMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setAccountMenuOpen(false)} />
+              <div className="absolute bottom-[52px] right-0 z-30 w-56 bg-white rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.18)] border border-[#EFF3F4] overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#EFF3F4]">
+                  <p className="text-[14px] font-bold truncate">{me.display_name}</p>
+                  <p className="text-[13px] text-[#536471] truncate">@{me.username}</p>
+                </div>
+                <button
+                  onClick={handleAddAccount}
+                  className="w-full text-left px-4 py-3 text-[14px] font-bold hover:bg-[#F7F8F8] transition-colors"
+                >
+                  新しいアカウントを追加
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-3 text-[14px] font-bold text-[#F4212E] hover:bg-[#F4212E]/10 transition-colors border-t border-[#EFF3F4]"
+                >
+                  ログアウト
+                </button>
+              </div>
+            </>
+          )}
+
+          <button onClick={() => setAccountMenuOpen((v) => !v)} className="p-2 block">
+            <Avatar url={me.avatar_url} name={me.display_name} size={28} />
+          </button>
+        </div>
       </nav>
     </div>
   );
@@ -96,6 +171,20 @@ function HomeIcon({ filled }: { filled: boolean }) {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
       <path
         d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"
+        fill={filled ? '#0F1419' : 'none'}
+        stroke="#0F1419"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function BookmarkIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M6 4h12a1 1 0 011 1v15l-7-4-7 4V5a1 1 0 011-1z"
         fill={filled ? '#0F1419' : 'none'}
         stroke="#0F1419"
         strokeWidth="1.6"
@@ -127,22 +216,12 @@ function UserIcon({ filled }: { filled: boolean }) {
   );
 }
 
-function LogoutIcon() {
+function MoreIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"
-        stroke="#536471"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16 17l5-5-5-5M21 12H9"
-        stroke="#536471"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="5" cy="12" r="1.8" fill="#536471" />
+      <circle cx="12" cy="12" r="1.8" fill="#536471" />
+      <circle cx="19" cy="12" r="1.8" fill="#536471" />
     </svg>
   );
 }
