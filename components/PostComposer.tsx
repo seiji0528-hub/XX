@@ -23,7 +23,7 @@ export default function PostComposer({
   const [error, setError] = useState<string | null>(null);
 
   const remaining = MAX_LEN - content.length;
-  const canPost = content.trim().length > 0 && remaining >= 0 && !posting;
+  const canPost = (content.trim().length > 0 || !!imageFile) && remaining >= 0 && !posting;
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
