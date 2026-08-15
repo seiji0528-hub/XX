@@ -27,6 +27,7 @@ export type PostWithMeta = {
   comments_count: number;
   repost_count: number;
   reposted_by_me: boolean;
+  quoted_post_id: string | null;
   quoted_post: QuotedPostMeta;
 };
 
