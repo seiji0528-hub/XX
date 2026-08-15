@@ -2,42 +2,25 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { PostWithMeta } from '@/lib/types';
+import type { PostWithMeta, Profile } from '@/lib/types';
+import { POST_SELECT, mapPostRow } from '@/lib/postQuery';
 import PostCard from './PostCard';
 
-export default function LikesFeed({ myUserId }: { myUserId: string }) {
+export default function LikesFeed({ myUserId, me }: { myUserId: string; me?: Profile }) {
   const supabase = createClient();
   const [posts, setPosts] = useState<PostWithMeta[] | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('x_likes')
-      .select(
-        `created_at,
-         x_posts!inner (
-           id, user_id, content, image_url, created_at,
-           x_profiles!x_posts_user_id_fkey ( username, display_name, avatar_url ),
-           x_likes ( user_id ),
-           x_comments ( id )
-         )`
-      )
+      .select(`created_at, x_posts!inner ( ${POST_SELECT} )`)
       .eq('user_id', myUserId)
       .order('created_at', { ascending: false });
 
     const mapped: PostWithMeta[] = ((data as any[]) ?? [])
       .map((row) => row.x_posts)
       .filter(Boolean)
-      .map((p: any) => ({
-        id: p.id,
-        user_id: p.user_id,
-        content: p.content,
-        image_url: p.image_url,
-        created_at: p.created_at,
-        profiles: p.x_profiles,
-        likes_count: p.x_likes?.length ?? 0,
-        liked_by_me: !!p.x_likes?.some((l: any) => l.user_id === myUserId),
-        comments_count: p.x_comments?.length ?? 0,
-      }));
+      .map((p: any) => mapPostRow(p, myUserId));
 
     setPosts(mapped);
   }, [supabase, myUserId]);
@@ -62,7 +45,7 @@ export default function LikesFeed({ myUserId }: { myUserId: string }) {
   return (
     <div>
       {posts.map((post) => (
-        <PostCard key={post.id} post={post} myUserId={myUserId} onChanged={load} />
+        <PostCard key={post.id} post={post} myUserId={myUserId} me={me} onChanged={load} />
       ))}
     </div>
   );
