@@ -62,6 +62,10 @@ export default function PostCard({
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
 
+  const [commentMenuOpenId, setCommentMenuOpenId] = useState<string | null>(null);
+  const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState<string | null>(null);
+  const [commentDeleting, setCommentDeleting] = useState(false);
+
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const isOwner = myUserId === post.user_id;
@@ -164,6 +168,19 @@ export default function PostCard({
       onChanged();
     }
     setCommentBusy(false);
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (commentDeleting) return;
+    setCommentDeleting(true);
+    const { error } = await supabase.from('x_comments').delete().eq('id', commentId);
+    setCommentDeleting(false);
+
+    if (!error) {
+      setComments((prev) => prev?.filter((c) => c.id !== commentId) ?? null);
+      setConfirmDeleteCommentId(null);
+      onChanged();
+    }
   }
 
   return (
@@ -339,9 +356,46 @@ export default function PostCard({
                 <div key={c.id} className="flex gap-2">
                   <Avatar url={c.profiles.avatar_url} name={c.profiles.display_name} size={28} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 text-[13px]">
-                      <span className="font-bold">{c.profiles.display_name}</span>
-                      <span className="text-[#536471]">@{c.profiles.username}</span>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1.5 text-[13px] min-w-0">
+                        <span className="font-bold">{c.profiles.display_name}</span>
+                        <span className="text-[#536471]">@{c.profiles.username}</span>
+                      </div>
+
+                      {c.user_id === myUserId && (
+                        <div className="relative shrink-0">
+                          <button
+                            onClick={() =>
+                              setCommentMenuOpenId((v) => (v === c.id ? null : c.id))
+                            }
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-[#536471] hover:bg-[#4A5FE0]/10 hover:text-[#4A5FE0] transition-colors"
+                            aria-label="返信メニュー"
+                          >
+                            <MoreIcon />
+                          </button>
+
+                          {commentMenuOpenId === c.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-20"
+                                onClick={() => setCommentMenuOpenId(null)}
+                              />
+                              <div className="absolute right-0 top-7 z-30 w-40 bg-white rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.15)] border border-[#EFF3F4] overflow-hidden">
+                                <button
+                                  onClick={() => {
+                                    setCommentMenuOpenId(null);
+                                    setConfirmDeleteCommentId(c.id);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-[13px] font-bold text-[#F4212E] hover:bg-[#F4212E]/10 transition-colors"
+                                >
+                                  <TrashIcon />
+                                  削除
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <p className="text-[14px] whitespace-pre-wrap break-words">{c.content}</p>
                   </div>
@@ -397,6 +451,39 @@ export default function PostCard({
             <button
               onClick={() => setConfirmOpen(false)}
               disabled={deleting}
+              className="w-full h-[44px] rounded-full border border-[#CFD9DE] text-[15px] font-bold mt-2 disabled:opacity-50"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmDeleteCommentId && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6"
+          onClick={(e) => {
+            stop(e);
+            if (!commentDeleting) setConfirmDeleteCommentId(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-[340px] p-6 flex flex-col items-center text-center"
+            onClick={stop}
+          >
+            <p className="text-[18px] font-bold mb-1">返信を削除しますか?</p>
+            <p className="text-[14px] text-[#536471] mb-5">この操作は取り消せません。</p>
+
+            <button
+              onClick={() => handleDeleteComment(confirmDeleteCommentId)}
+              disabled={commentDeleting}
+              className="w-full h-[44px] rounded-full bg-[#F4212E] text-white text-[15px] font-bold disabled:opacity-50 transition-opacity"
+            >
+              {commentDeleting ? '削除中…' : '削除'}
+            </button>
+            <button
+              onClick={() => setConfirmDeleteCommentId(null)}
+              disabled={commentDeleting}
               className="w-full h-[44px] rounded-full border border-[#CFD9DE] text-[15px] font-bold mt-2 disabled:opacity-50"
             >
               キャンセル
